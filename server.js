@@ -20,6 +20,7 @@ app.use(express.json());
 app.use(cors());
 
 let sock;
+let isReady = false;
 let pairingCode = null;
 
 // ===== START WA =====
