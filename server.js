@@ -37,17 +37,18 @@ async function startWA() {
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", (update) => {
-    const { connection } = update;
+  const { connection } = update;
 
-    if (connection === "open") {
-      console.log("✅ WA CONNECTED");
-      pairingCode = null;
-    }
+  if (connection === "open") {
+    console.log("✅ WA READY");
+    isReady = true;
+  }
 
-    if (connection === "close") {
-      console.log("❌ WA DISCONNECTED");
-    }
-  });
+  if (connection === "close") {
+    console.log("❌ WA DISCONNECTED");
+    isReady = false;
+  }
+});
 
   console.log("🚀 WA READY");
 }
@@ -67,9 +68,8 @@ app.get("/pair", async (req, res) => {
     }
 
     if (!isReady) {
-      return res.json({ error: "WA belum ready, tunggu..." });
-    }
-
+  return res.json({ error: "WA belum ready, tunggu..." });
+}
     if (sock.authState.creds.registered) {
       return res.json({ status: "connected" });
     }
