@@ -67,7 +67,7 @@ app.get("/pair", async (req, res) => {
     }
 
     // 🔥 GANTI NOMOR LU DISINI
-    const code = await sock.requestPairingCode("6281234567890");
+    const code = await sock.requestPairingCode("6287710303740");
 
     pairingCode = code;
 
