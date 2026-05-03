@@ -1,57 +1,73 @@
 import express from "express";
 import cors from "cors";
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import pkg from "@whiskeysockets/baileys";
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = pkg;
 import P from "pino";
 import fs from "fs";
 
-// ===== RESET SESSION BIAR QR MUNCUL =====
-fs.rmSync("./session", { recursive: true, force: true });
-fs.mkdirSync("./session");
+// ===== ERROR HANDLER =====
+process.on("uncaughtException", (err) => console.error("Uncaught:", err));
+process.on("unhandledRejection", (err) => console.error("Unhandled:", err));
+
+// ===== SESSION SAFE =====
+if (!fs.existsSync("./session")) {
+  fs.mkdirSync("./session");
+}
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
 let sock;
-let currentQR = null; // 🔥 simpan QR disini
+let currentQR = null;
 
-// ===== START WA =====
+// ===== START WA (NON-BLOCKING) =====
 async function startWA() {
-  const { state, saveCreds } = await useMultiFileAuthState("./session");
-  const { version } = await fetchLatestBaileysVersion();
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState("./session");
+    const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger: P({ level: "silent" }),
-    printQRInTerminal: false
-  });
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: P({ level: "silent" }),
+      printQRInTerminal: false
+    });
 
-  sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", (update) => {
-    const { connection, qr } = update;
+    sock.ev.on("connection.update", (update) => {
+      const { connection, qr } = update;
 
-    // 🔥 SIMPAN QR
-    if (qr) {
-      currentQR = qr;
-      console.log("📲 QR TERBARU SIAP");
-    }
+      if (qr) {
+        currentQR = qr;
+        console.log("📲 QR READY");
+      }
 
-    if (connection === "open") {
-      console.log("✅ WA CONNECTED");
-      currentQR = null; // hapus QR kalau sudah connect
-    }
+      if (connection === "open") {
+        console.log("✅ WA CONNECTED");
+        currentQR = null;
+      }
 
-    if (connection === "close") {
-      console.log("❌ WA DISCONNECTED");
-    }
-  });
+      if (connection === "close") {
+        console.log("❌ WA DISCONNECTED");
+      }
+    });
+
+  } catch (err) {
+    console.error("WA ERROR:", err);
+  }
 }
 
+// 🚀 JANGAN BLOCK SERVER
 startWA();
 
-// ===== ENDPOINT QR =====
+// ===== ROOT =====
+app.get("/", (req, res) => {
+  res.send("🔥 WA CHECK API RUNNING");
+});
+
+// ===== QR =====
 app.get("/qr", (req, res) => {
   if (!currentQR) {
     return res.json({
@@ -66,21 +82,17 @@ app.get("/qr", (req, res) => {
   });
 });
 
-// ===== CHECK NOMOR =====
+// ===== CHECK =====
 app.post("/check", async (req, res) => {
   try {
     let { number } = req.body;
 
-    if (!number) {
-      return res.json({ error: "Nomor kosong" });
-    }
+    if (!number) return res.json({ error: "Nomor kosong" });
 
     number = number.replace(/\D/g, "");
     if (number.startsWith("0")) number = "62" + number.slice(1);
 
-    if (!sock) {
-      return res.json({ error: "WA belum connect" });
-    }
+    if (!sock) return res.json({ error: "WA belum siap" });
 
     const r = await sock.onWhatsApp(number);
 
@@ -94,10 +106,8 @@ app.post("/check", async (req, res) => {
   }
 });
 
-// ===== ROOT =====
-app.get("/", (req, res) => {
-  res.send("🔥 WA CHECK API RUNNING");
+// ===== PORT WAJIB RAILWAY =====
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 API jalan di", PORT);
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 API jalan di " + PORT));
