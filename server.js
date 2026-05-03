@@ -1,25 +1,15 @@
 import express from "express";
 import cors from "cors";
-import baileys from "@whiskeysockets/baileys";
+import pkg from "@whiskeysockets/baileys";
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = pkg;
 import P from "pino";
 import fs from "fs";
 
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion
-} = baileys;
+// ===== ERROR HANDLER =====
+process.on("uncaughtException", err => console.error("Uncaught:", err));
+process.on("unhandledRejection", err => console.error("Unhandled:", err));
 
-// ===== PROTEKSI ERROR GLOBAL =====
-process.on("uncaughtException", (err) => {
-  console.error("Uncaught:", err);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.error("Unhandled:", err);
-});
-
-// ===== BUAT FOLDER SESSION =====
+// ===== SESSION FOLDER =====
 if (!fs.existsSync("./session")) {
   fs.mkdirSync("./session");
 }
@@ -29,9 +19,9 @@ app.use(express.json());
 app.use(cors());
 
 let sock;
-let latestQR = null;
+let currentQR = null;
 
-// ===== START WHATSAPP =====
+// ===== START WA =====
 async function startWA() {
   try {
     const { state, saveCreds } = await useMultiFileAuthState("./session");
@@ -50,37 +40,42 @@ async function startWA() {
       const { connection, qr } = update;
 
       if (qr) {
-        latestQR = qr;
-        console.log("📱 QR updated");
+        currentQR = qr;
+        console.log("📱 QR READY");
       }
 
       if (connection === "open") {
-        console.log("✅ WA Connected");
+        console.log("✅ WA CONNECTED");
+        currentQR = null;
       }
 
       if (connection === "close") {
-        console.log("❌ WA Disconnected");
+        console.log("❌ WA DISCONNECTED");
       }
     });
 
     console.log("🚀 WA starting...");
   } catch (err) {
-    console.error("❌ WA gagal start:", err);
+    console.error("WA ERROR:", err);
   }
 }
 
 // ===== INIT =====
-async function init() {
-  try {
-    await startWA();
-  } catch (err) {
-    console.error("Init error:", err);
+startWA();
+
+// ===== GET QR =====
+app.get("/qr", (req, res) => {
+  if (!currentQR) {
+    return res.json({ status: "waiting", message: "QR belum tersedia / sudah connect" });
   }
-}
 
-init();
+  res.json({
+    status: "success",
+    qr: currentQR
+  });
+});
 
-// ===== API CHECK NOMOR =====
+// ===== CHECK NUMBER =====
 app.post("/check", async (req, res) => {
   try {
     let { number } = req.body;
@@ -108,16 +103,9 @@ app.post("/check", async (req, res) => {
   }
 });
 
-// ===== API QR =====
-app.get("/qr", (req, res) => {
-  if (!latestQR) {
-    return res.json({ status: "waiting", message: "QR belum ready" });
-  }
-
-  res.json({
-    status: "success",
-    qr: latestQR
-  });
+// ===== ROOT =====
+app.get("/", (req, res) => {
+  res.send("🔥 WA CHECK API RUNNING");
 });
 
 // ===== SERVER =====
