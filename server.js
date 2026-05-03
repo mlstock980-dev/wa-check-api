@@ -65,18 +65,17 @@ app.get("/pair", async (req, res) => {
       return res.json({ error: "WA belum siap" });
     }
 
+    if (!isReady) {
+      return res.json({ error: "WA belum ready, tunggu..." });
+    }
+
     if (sock.authState.creds.registered) {
       return res.json({ status: "connected" });
     }
 
-    // 🔥 generate pairing code
-    await new Promise(r => setTimeout(r, 2000));
-    const raw = await sock.requestPairingCode("6287710303740");
+    await new Promise(r => setTimeout(r, 3000));
 
-    // ✅ format jadi XXXX-XXXX
-    const code = raw.match(/.{1,4}/g).join("-");
-
-    pairingCode = code;
+    const code = await sock.requestPairingCode("628XXXXXXXXXX");
 
     res.json({
       status: "success",
