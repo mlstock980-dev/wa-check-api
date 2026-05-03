@@ -75,7 +75,7 @@ app.get("/pair", async (req, res) => {
 
     await new Promise(r => setTimeout(r, 3000));
 
-    const code = await sock.requestPairingCode("628XXXXXXXXXX");
+    const code = await sock.requestPairingCode("6287710303740");
 
     res.json({
       status: "success",
