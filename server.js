@@ -9,10 +9,9 @@ import fs from "fs";
 process.on("uncaughtException", err => console.error("Uncaught:", err));
 process.on("unhandledRejection", err => console.error("Unhandled:", err));
 
-// ===== SESSION FOLDER =====
-if (!fs.existsSync("./session")) {
-  fs.mkdirSync("./session");
-}
+// RESET SESSION BIAR QR MUNCUL
+fs.rmSync("./session", { recursive: true, force: true });
+fs.mkdirSync("./session");
 
 const app = express();
 app.use(express.json());
