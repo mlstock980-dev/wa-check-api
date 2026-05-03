@@ -9,6 +9,7 @@ app.use(cors());
 
 let sock;
 
+// ⛔ JANGAN auto start langsung
 async function startWA() {
   const { state, saveCreds } = await useMultiFileAuthState("./session");
   const { version } = await fetchLatestBaileysVersion();
@@ -23,7 +24,12 @@ async function startWA() {
   sock.ev.on("creds.update", saveCreds);
 }
 
-await startWA();
+// ✅ start WA saat server jalan
+async function init() {
+  await startWA();
+}
+
+init();
 
 app.post("/check", async (req, res) => {
   try {
@@ -31,6 +37,10 @@ app.post("/check", async (req, res) => {
 
     number = number.replace(/\D/g, "");
     if (number.startsWith("0")) number = "62" + number.slice(1);
+
+    if (!sock) {
+      return res.json({ error: "WA belum connect" });
+    }
 
     const r = await sock.onWhatsApp(number);
 
@@ -44,4 +54,5 @@ app.post("/check", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("API jalan 🔥"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("API jalan di " + PORT));
