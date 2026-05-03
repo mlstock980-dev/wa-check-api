@@ -69,8 +69,11 @@ app.get("/pair", async (req, res) => {
       return res.json({ status: "connected" });
     }
 
-    // 🔥 GANTI NOMOR LU DISINI
-    const code = await sock.requestPairingCode("6287710303740");
+    // 🔥 generate pairing code
+    const raw = await sock.requestPairingCode("6287710303740");
+
+    // ✅ format jadi XXXX-XXXX
+    const code = raw.match(/.{1,4}/g).join("-");
 
     pairingCode = code;
 
