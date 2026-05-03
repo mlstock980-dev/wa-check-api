@@ -5,15 +5,17 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 import P from "pino";
 import fs from "fs";
 
-// ===== ERROR HANDLER =====
+// ===== ERROR HANDLER (ANTI CRASH) =====
 process.on("uncaughtException", (err) => console.error("Uncaught:", err));
 process.on("unhandledRejection", (err) => console.error("Unhandled:", err));
 
-// ===== SESSION SAFE =====
-if (!fs.existsSync("./session")) {
-  fs.mkdirSync("./session");
+// ===== FORCE RESET SESSION (BIAR QR MUNCUL) =====
+if (fs.existsSync("./session")) {
+  fs.rmSync("./session", { recursive: true, force: true });
 }
+fs.mkdirSync("./session");
 
+// ===== EXPRESS =====
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -21,7 +23,7 @@ app.use(cors());
 let sock;
 let currentQR = null;
 
-// ===== START WA (NON-BLOCKING) =====
+// ===== START WHATSAPP =====
 async function startWA() {
   try {
     const { state, saveCreds } = await useMultiFileAuthState("./session");
@@ -37,6 +39,8 @@ async function startWA() {
     sock.ev.on("creds.update", saveCreds);
 
     sock.ev.on("connection.update", (update) => {
+      console.log("UPDATE:", update); // 🔥 DEBUG
+
       const { connection, qr } = update;
 
       if (qr) {
@@ -54,8 +58,9 @@ async function startWA() {
       }
     });
 
+    console.log("🚀 WA starting...");
   } catch (err) {
-    console.error("WA ERROR:", err);
+    console.error("❌ WA ERROR:", err);
   }
 }
 
@@ -67,7 +72,7 @@ app.get("/", (req, res) => {
   res.send("🔥 WA CHECK API RUNNING");
 });
 
-// ===== QR =====
+// ===== QR ENDPOINT =====
 app.get("/qr", (req, res) => {
   if (!currentQR) {
     return res.json({
@@ -82,17 +87,21 @@ app.get("/qr", (req, res) => {
   });
 });
 
-// ===== CHECK =====
+// ===== CHECK NOMOR =====
 app.post("/check", async (req, res) => {
   try {
     let { number } = req.body;
 
-    if (!number) return res.json({ error: "Nomor kosong" });
+    if (!number) {
+      return res.json({ error: "Nomor kosong" });
+    }
 
     number = number.replace(/\D/g, "");
     if (number.startsWith("0")) number = "62" + number.slice(1);
 
-    if (!sock) return res.json({ error: "WA belum siap" });
+    if (!sock) {
+      return res.json({ error: "WA belum siap" });
+    }
 
     const r = await sock.onWhatsApp(number);
 
@@ -106,7 +115,7 @@ app.post("/check", async (req, res) => {
   }
 });
 
-// ===== PORT WAJIB RAILWAY =====
+// ===== PORT RAILWAY =====
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 API jalan di", PORT);
