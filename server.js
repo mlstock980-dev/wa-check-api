@@ -1,3 +1,6 @@
+import crypto from "crypto";
+global.crypto = crypto.webcrypto;
+
 import express from "express";
 import cors from "cors";
 import pkg from "@whiskeysockets/baileys";
