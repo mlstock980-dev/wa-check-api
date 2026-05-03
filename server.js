@@ -1,15 +1,10 @@
 import express from "express";
 import cors from "cors";
-import pkg from "@whiskeysockets/baileys";
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = pkg;
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import P from "pino";
 import fs from "fs";
 
-// ===== ERROR HANDLER =====
-process.on("uncaughtException", err => console.error("Uncaught:", err));
-process.on("unhandledRejection", err => console.error("Unhandled:", err));
-
-// RESET SESSION BIAR QR MUNCUL
+// ===== RESET SESSION BIAR QR MUNCUL =====
 fs.rmSync("./session", { recursive: true, force: true });
 fs.mkdirSync("./session");
 
@@ -18,54 +13,51 @@ app.use(express.json());
 app.use(cors());
 
 let sock;
-let currentQR = null;
+let currentQR = null; // 🔥 simpan QR disini
 
 // ===== START WA =====
 async function startWA() {
-  try {
-    const { state, saveCreds } = await useMultiFileAuthState("./session");
-    const { version } = await fetchLatestBaileysVersion();
+  const { state, saveCreds } = await useMultiFileAuthState("./session");
+  const { version } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
-      version,
-      auth: state,
-      logger: P({ level: "silent" }),
-      printQRInTerminal: false
-    });
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger: P({ level: "silent" }),
+    printQRInTerminal: false
+  });
 
-    sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("connection.update", (update) => {
-      const { connection, qr } = update;
+  sock.ev.on("connection.update", (update) => {
+    const { connection, qr } = update;
 
-      if (qr) {
-        currentQR = qr;
-        console.log("📱 QR READY");
-      }
+    // 🔥 SIMPAN QR
+    if (qr) {
+      currentQR = qr;
+      console.log("📲 QR TERBARU SIAP");
+    }
 
-      if (connection === "open") {
-        console.log("✅ WA CONNECTED");
-        currentQR = null;
-      }
+    if (connection === "open") {
+      console.log("✅ WA CONNECTED");
+      currentQR = null; // hapus QR kalau sudah connect
+    }
 
-      if (connection === "close") {
-        console.log("❌ WA DISCONNECTED");
-      }
-    });
-
-    console.log("🚀 WA starting...");
-  } catch (err) {
-    console.error("WA ERROR:", err);
-  }
+    if (connection === "close") {
+      console.log("❌ WA DISCONNECTED");
+    }
+  });
 }
 
-// ===== INIT =====
 startWA();
 
-// ===== GET QR =====
+// ===== ENDPOINT QR =====
 app.get("/qr", (req, res) => {
   if (!currentQR) {
-    return res.json({ status: "waiting", message: "QR belum tersedia / sudah connect" });
+    return res.json({
+      status: "waiting",
+      message: "QR belum tersedia / sudah connect"
+    });
   }
 
   res.json({
@@ -74,7 +66,7 @@ app.get("/qr", (req, res) => {
   });
 });
 
-// ===== CHECK NUMBER =====
+// ===== CHECK NOMOR =====
 app.post("/check", async (req, res) => {
   try {
     let { number } = req.body;
@@ -107,6 +99,5 @@ app.get("/", (req, res) => {
   res.send("🔥 WA CHECK API RUNNING");
 });
 
-// ===== SERVER =====
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🔥 API jalan di " + PORT));
+app.listen(PORT, () => console.log("🚀 API jalan di " + PORT));
