@@ -5,66 +5,50 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 import P from "pino";
 import fs from "fs";
 
-// ===== ERROR HANDLER (ANTI CRASH) =====
-process.on("uncaughtException", (err) => console.error("Uncaught:", err));
-process.on("unhandledRejection", (err) => console.error("Unhandled:", err));
-
-// ===== FORCE RESET SESSION (BIAR QR MUNCUL) =====
-if (fs.existsSync("./session")) {
-  fs.rmSync("./session", { recursive: true, force: true });
-}
-fs.mkdirSync("./session");
-
-// ===== EXPRESS =====
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// session
+if (!fs.existsSync("./session")) fs.mkdirSync("./session");
+
 let sock;
-let currentQR = null;
+let pairingCode = null;
 
-// ===== START WHATSAPP =====
+// ===== START WA =====
 async function startWA() {
-  try {
-    const { state, saveCreds } = await useMultiFileAuthState("./session");
-    const { version } = await fetchLatestBaileysVersion();
+  const { state, saveCreds } = await useMultiFileAuthState("./session");
+  const { version } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
-      version,
-      auth: state,
-      logger: P({ level: "silent" }),
-      printQRInTerminal: false
-    });
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger: P({ level: "silent" }),
+  });
 
-    sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("connection.update", (update) => {
-      console.log("UPDATE:", update); // 🔥 DEBUG
+  sock.ev.on("connection.update", async (update) => {
+    const { connection } = update;
 
-      const { connection, qr } = update;
+    if (connection === "open") {
+      console.log("✅ WA CONNECTED");
+      pairingCode = null;
+    }
 
-      if (qr) {
-        currentQR = qr;
-        console.log("📲 QR READY");
-      }
+    if (connection === "close") {
+      console.log("❌ WA DISCONNECTED");
+    }
+  });
 
-      if (connection === "open") {
-        console.log("✅ WA CONNECTED");
-        currentQR = null;
-      }
-
-      if (connection === "close") {
-        console.log("❌ WA DISCONNECTED");
-      }
-    });
-
-    console.log("🚀 WA starting...");
-  } catch (err) {
-    console.error("❌ WA ERROR:", err);
+  // 🔥 PAIRING CODE (INI KUNCI)
+  if (!sock.authState.creds.registered) {
+    const code = await sock.requestPairingCode("6287710303740"); // GANTI NOMOR LU
+    pairingCode = code;
+    console.log("📲 Pairing Code:", code);
   }
 }
 
-// 🚀 JANGAN BLOCK SERVER
 startWA();
 
 // ===== ROOT =====
@@ -72,36 +56,30 @@ app.get("/", (req, res) => {
   res.send("🔥 WA CHECK API RUNNING");
 });
 
-// ===== QR ENDPOINT =====
-app.get("/qr", (req, res) => {
-  if (!currentQR) {
+// ===== GET PAIRING CODE =====
+app.get("/pair", (req, res) => {
+  if (!pairingCode) {
     return res.json({
       status: "waiting",
-      message: "QR belum tersedia / sudah connect"
+      message: "sudah connect / belum generate"
     });
   }
 
   res.json({
     status: "success",
-    qr: currentQR
+    code: pairingCode
   });
 });
 
-// ===== CHECK NOMOR =====
+// ===== CHECK =====
 app.post("/check", async (req, res) => {
   try {
     let { number } = req.body;
 
-    if (!number) {
-      return res.json({ error: "Nomor kosong" });
-    }
-
     number = number.replace(/\D/g, "");
     if (number.startsWith("0")) number = "62" + number.slice(1);
 
-    if (!sock) {
-      return res.json({ error: "WA belum siap" });
-    }
+    if (!sock) return res.json({ error: "WA belum siap" });
 
     const r = await sock.onWhatsApp(number);
 
@@ -115,7 +93,7 @@ app.post("/check", async (req, res) => {
   }
 });
 
-// ===== PORT RAILWAY =====
+// ===== PORT =====
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 API jalan di", PORT);
