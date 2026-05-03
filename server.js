@@ -5,12 +5,16 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 import P from "pino";
 import fs from "fs";
 
+// ===== ANTI CRASH =====
+process.on("uncaughtException", console.error);
+process.on("unhandledRejection", console.error);
+
+// ===== SESSION =====
+if (!fs.existsSync("./session")) fs.mkdirSync("./session");
+
 const app = express();
 app.use(express.json());
 app.use(cors());
-
-// session
-if (!fs.existsSync("./session")) fs.mkdirSync("./session");
 
 let sock;
 let pairingCode = null;
@@ -28,7 +32,7 @@ async function startWA() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async (update) => {
+  sock.ev.on("connection.update", (update) => {
     const { connection } = update;
 
     if (connection === "open") {
@@ -41,12 +45,7 @@ async function startWA() {
     }
   });
 
-  // 🔥 PAIRING CODE (INI KUNCI)
-  if (!sock.authState.creds.registered) {
-    const code = await sock.requestPairingCode("6287710303740"); // GANTI NOMOR LU
-    pairingCode = code;
-    console.log("📲 Pairing Code:", code);
-  }
+  console.log("🚀 WA READY");
 }
 
 startWA();
@@ -56,19 +55,30 @@ app.get("/", (req, res) => {
   res.send("🔥 WA CHECK API RUNNING");
 });
 
-// ===== GET PAIRING CODE =====
-app.get("/pair", (req, res) => {
-  if (!pairingCode) {
-    return res.json({
-      status: "waiting",
-      message: "sudah connect / belum generate"
-    });
-  }
+// ===== PAIR ENDPOINT (AMAN) =====
+app.get("/pair", async (req, res) => {
+  try {
+    if (!sock) {
+      return res.json({ error: "WA belum siap" });
+    }
 
-  res.json({
-    status: "success",
-    code: pairingCode
-  });
+    if (sock.authState.creds.registered) {
+      return res.json({ status: "connected" });
+    }
+
+    // 🔥 GANTI NOMOR LU DISINI
+    const code = await sock.requestPairingCode("6281234567890");
+
+    pairingCode = code;
+
+    res.json({
+      status: "success",
+      code
+    });
+
+  } catch (err) {
+    res.json({ error: err.message });
+  }
 });
 
 // ===== CHECK =====
