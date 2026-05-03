@@ -1,8 +1,14 @@
 import express from "express";
 import cors from "cors";
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import baileys from "@whiskeysockets/baileys";
 import P from "pino";
 import fs from "fs";
+
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion
+} = baileys;
 
 // ===== PROTEKSI ERROR GLOBAL =====
 process.on("uncaughtException", (err) => {
@@ -23,6 +29,7 @@ app.use(express.json());
 app.use(cors());
 
 let sock;
+let latestQR = null;
 
 // ===== START WHATSAPP =====
 async function startWA() {
@@ -34,13 +41,18 @@ async function startWA() {
       version,
       auth: state,
       logger: P({ level: "silent" }),
-      printQRInTerminal: false // jangan true di Railway
+      printQRInTerminal: false
     });
 
     sock.ev.on("creds.update", saveCreds);
 
     sock.ev.on("connection.update", (update) => {
-      const { connection } = update;
+      const { connection, qr } = update;
+
+      if (qr) {
+        latestQR = qr;
+        console.log("📱 QR updated");
+      }
 
       if (connection === "open") {
         console.log("✅ WA Connected");
@@ -57,7 +69,7 @@ async function startWA() {
   }
 }
 
-// ===== INIT TANPA CRASH =====
+// ===== INIT =====
 async function init() {
   try {
     await startWA();
@@ -94,6 +106,18 @@ app.post("/check", async (req, res) => {
   } catch (e) {
     res.json({ error: e.message });
   }
+});
+
+// ===== API QR =====
+app.get("/qr", (req, res) => {
+  if (!latestQR) {
+    return res.json({ status: "waiting", message: "QR belum ready" });
+  }
+
+  res.json({
+    status: "success",
+    qr: latestQR
+  });
 });
 
 // ===== SERVER =====
