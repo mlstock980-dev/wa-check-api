@@ -70,6 +70,7 @@ app.get("/pair", async (req, res) => {
     }
 
     // 🔥 generate pairing code
+    await new Promise(r => setTimeout(r, 2000));
     const raw = await sock.requestPairingCode("6287710303740");
 
     // ✅ format jadi XXXX-XXXX
